@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>IPTV Voltgizerz</title>
+
+<link rel="stylesheet" href="/static/style.css">
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <aside class="sidebar">
+
+        <div class="logo">
+            IPTV Voltgizerz
+        </div>
+
+        <select id="country">
+            <option value="">All Countries</option>
+        </select>
+
+        <input
+            type="text"
+            id="search"
+            placeholder="Search channel..."
+        />
+
+        <div id="channels" class="channels">
+        </div>
+
+    </aside>
+
+    <main class="content">
+
+        <div class="player-wrapper">
+
+            <video
+                id="video"
+                controls
+                autoplay
+                playsinline
+            ></video>
+
+        </div>
+
+        <div class="player-info">
+
+            <h2 id="channelName">
+                Select a channel
+            </h2>
+
+            <button onclick="fullscreenPlayer()">
+                Fullscreen
+            </button>
+
+        </div>
+
+    </main>
+
+</div>
+
+<script>
+
+let hls
+
+async function loadCountries() {
+
+    const res = await fetch('/api/countries')
+    const data = await res.json()
+
+    const select =
+        document.getElementById('country')
+
+    data.forEach(country => {
+
+        select.innerHTML += `
+            <option value="${country.code}">
+                ${country.name}
+            </option>
+        `
+    })
+}
+
+async function loadChannels() {
+
+    const country =
+        document.getElementById('country').value
+
+    const search =
+        document.getElementById('search').value
+
+    const res = await fetch(
+        `/api/channels?country=${country}&q=${encodeURIComponent(search)}`
+    )
+
+    const channels = await res.json()
+
+    let html = ""
+
+    channels.forEach(channel => {
+
+        html += `
+        <div
+            class="channel"
+            onclick="playChannel('${channel.id}','${channel.name}')">
+
+            <img
+                src="${channel.logo}"
+                onerror="this.src='https://placehold.co/60x60?text=TV'"
+            >
+
+            <div class="channel-name">
+                ${channel.name}
+            </div>
+
+        </div>
+        `
+    })
+
+    document
+        .getElementById('channels')
+        .innerHTML = html
+}
+
+async function playChannel(id,name) {
+
+    document.getElementById(
+        'channelName'
+    ).innerText = name
+
+    const res =
+        await fetch(`/api/stream/${id}`)
+
+    const data =
+        await res.json()
+
+    const video =
+        document.getElementById('video')
+
+    if (hls) {
+        hls.destroy()
+    }
+
+    if (Hls.isSupported()) {
+
+        hls = new Hls()
+
+        hls.loadSource(data.url)
+
+        hls.attachMedia(video)
+
+    } else {
+
+        video.src = data.url
+    }
+
+    video.play()
+}
+
+function fullscreenPlayer() {
+
+    const video =
+        document.getElementById('video')
+
+    if (video.requestFullscreen) {
+        video.requestFullscreen()
+    }
+}
+
+document
+    .getElementById('country')
+    .addEventListener('change', loadChannels)
+
+document
+    .getElementById('search')
+    .addEventListener('input', loadChannels)
+
+loadCountries()
+loadChannels()
+
+</script>
+
+</body>
+</html>
