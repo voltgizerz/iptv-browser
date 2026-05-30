@@ -27,16 +27,21 @@ type iptvRepository struct {
 	streams   []model.Stream
 	logos     []model.Logo
 
+	streamMap map[string]string
+	logoMap   map[string]string
+
 	lastRefresh time.Time
 }
 
-const cacheTTL = 1 * time.Hour
+const cacheTTL = 6 * time.Hour
 
 func NewIPTVRepository() IPTVRepository {
 	return &iptvRepository{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		streamMap: make(map[string]string),
+		logoMap:   make(map[string]string),
 	}
 }
 
@@ -54,8 +59,8 @@ func (r *iptvRepository) ensureCache(ctx context.Context) error {
 
 	r.mu.RLock()
 
-	if time.Since(r.lastRefresh) < cacheTTL &&
-		len(r.channels) > 0 {
+	if len(r.channels) > 0 &&
+		time.Since(r.lastRefresh) < cacheTTL {
 		r.mu.RUnlock()
 		return nil
 	}
@@ -65,55 +70,107 @@ func (r *iptvRepository) ensureCache(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if time.Since(r.lastRefresh) < cacheTTL &&
-		len(r.channels) > 0 {
+	if len(r.channels) > 0 &&
+		time.Since(r.lastRefresh) < cacheTTL {
 		return nil
 	}
 
-	var countries []model.Country
-	var channels []model.Channel
-	var streams []model.Stream
-	var logos []model.Logo
+	var (
+		countries []model.Country
+		channels  []model.Channel
+		streams   []model.Stream
+		logos     []model.Logo
 
-	if err := r.fetch(
-		"https://iptv-org.github.io/api/countries.json",
-		&countries,
-	); err != nil {
-		return err
+		countriesErr error
+		channelsErr  error
+		streamsErr   error
+		logosErr     error
+	)
+
+	var wg sync.WaitGroup
+
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+
+		countriesErr = r.fetch(
+			"https://iptv-org.github.io/api/countries.json",
+			&countries,
+		)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		channelsErr = r.fetch(
+			"https://iptv-org.github.io/api/channels.json",
+			&channels,
+		)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		streamsErr = r.fetch(
+			"https://iptv-org.github.io/api/streams.json",
+			&streams,
+		)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		logosErr = r.fetch(
+			"https://iptv-org.github.io/api/logos.json",
+			&logos,
+		)
+	}()
+
+	wg.Wait()
+
+	if countriesErr != nil {
+		return countriesErr
 	}
 
-	if err := r.fetch(
-		"https://iptv-org.github.io/api/channels.json",
-		&channels,
-	); err != nil {
-		return err
+	if channelsErr != nil {
+		return channelsErr
 	}
 
-	if err := r.fetch(
-		"https://iptv-org.github.io/api/streams.json",
-		&streams,
-	); err != nil {
-		return err
+	if streamsErr != nil {
+		return streamsErr
 	}
 
-	if err := r.fetch(
-		"https://iptv-org.github.io/api/logos.json",
-		&logos,
-	); err != nil {
-		return err
+	if logosErr != nil {
+		return logosErr
+	}
+
+	streamMap := make(map[string]string)
+
+	for _, stream := range streams {
+		streamMap[stream.Channel] = stream.URL
+	}
+
+	logoMap := make(map[string]string)
+
+	for _, logo := range logos {
+		logoMap[logo.Channel] = logo.URL
 	}
 
 	r.countries = countries
 	r.channels = channels
 	r.streams = streams
 	r.logos = logos
+
+	r.streamMap = streamMap
+	r.logoMap = logoMap
+
 	r.lastRefresh = time.Now()
 
 	return nil
 }
 
 func (r *iptvRepository) GetCountries(ctx context.Context) ([]model.Country, error) {
-
 	if err := r.ensureCache(ctx); err != nil {
 		return nil, err
 	}
@@ -125,7 +182,6 @@ func (r *iptvRepository) GetCountries(ctx context.Context) ([]model.Country, err
 }
 
 func (r *iptvRepository) GetChannels(ctx context.Context) ([]model.Channel, error) {
-
 	if err := r.ensureCache(ctx); err != nil {
 		return nil, err
 	}
@@ -137,7 +193,6 @@ func (r *iptvRepository) GetChannels(ctx context.Context) ([]model.Channel, erro
 }
 
 func (r *iptvRepository) GetStreams(ctx context.Context) ([]model.Stream, error) {
-
 	if err := r.ensureCache(ctx); err != nil {
 		return nil, err
 	}
@@ -149,7 +204,6 @@ func (r *iptvRepository) GetStreams(ctx context.Context) ([]model.Stream, error)
 }
 
 func (r *iptvRepository) GetLogos(ctx context.Context) ([]model.Logo, error) {
-
 	if err := r.ensureCache(ctx); err != nil {
 		return nil, err
 	}

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>IPTV Voltgizerz</title>
+<title>IPTV Browser by Voltgizerz</title>
 
 <link rel="stylesheet" href="/static/style.css">
 
@@ -19,12 +19,17 @@
     <aside class="sidebar">
 
         <div class="logo">
-            IPTV Voltgizerz
+            IPTV Browser
         </div>
 
-        <select id="country">
-            <option value="">All Countries</option>
-        </select>
+        <input
+            type="text"
+            id="country"
+            list="countries"
+            placeholder="Search country..."
+        >
+
+        <datalist id="countries"></datalist>
 
         <input
             type="text"
@@ -69,29 +74,36 @@
 <script>
 
 let hls
+let countriesMap = {}
 
 async function loadCountries() {
 
     const res = await fetch('/api/countries')
     const data = await res.json()
 
-    const select =
-        document.getElementById('country')
+    const datalist =
+        document.getElementById('countries')
+
+    datalist.innerHTML = ""
 
     data.forEach(country => {
 
-        select.innerHTML += `
-            <option value="${country.code}">
-                ${country.name}
-            </option>
+        countriesMap[country.name] =
+            country.code
+
+        datalist.innerHTML += `
+            <option value="${country.name}">
         `
     })
 }
 
 async function loadChannels() {
 
-    const country =
+    const countryInput =
         document.getElementById('country').value
+
+    const country =
+        countriesMap[countryInput] || ""
 
     const search =
         document.getElementById('search').value
@@ -129,7 +141,7 @@ async function loadChannels() {
         .innerHTML = html
 }
 
-async function playChannel(id,name) {
+async function playChannel(id, name) {
 
     document.getElementById(
         'channelName'
@@ -176,7 +188,7 @@ function fullscreenPlayer() {
 
 document
     .getElementById('country')
-    .addEventListener('change', loadChannels)
+    .addEventListener('input', loadChannels)
 
 document
     .getElementById('search')
