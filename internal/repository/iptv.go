@@ -15,6 +15,7 @@ type IPTVRepository interface {
 	GetChannels(context.Context) ([]model.Channel, error)
 	GetStreams(context.Context) ([]model.Stream, error)
 	GetLogos(context.Context) ([]model.Logo, error)
+	GetStreamURL(context.Context, string) (string, error)
 }
 
 type iptvRepository struct {
@@ -212,4 +213,15 @@ func (r *iptvRepository) GetLogos(ctx context.Context) ([]model.Logo, error) {
 	defer r.mu.RUnlock()
 
 	return r.logos, nil
+}
+
+func (r *iptvRepository) GetStreamURL(ctx context.Context, channelID string) (string, error) {
+	if err := r.ensureCache(ctx); err != nil {
+		return "", err
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return r.streamMap[channelID], nil
 }

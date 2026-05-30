@@ -31,6 +31,7 @@ func (s *IPTVService) GetChannels(
 	country string,
 	search string,
 ) ([]model.ChannelResponse, error) {
+	search = strings.ToLower(strings.TrimSpace(search))
 
 	channels, err := s.repo.GetChannels(ctx)
 	if err != nil {
@@ -57,7 +58,7 @@ func (s *IPTVService) GetChannels(
 		logoMap[l.Channel] = l.URL
 	}
 
-	result := make([]model.ChannelResponse, 0)
+	result := make([]model.ChannelResponse, 0, len(channels))
 
 	for _, ch := range channels {
 
@@ -69,7 +70,7 @@ func (s *IPTVService) GetChannels(
 		if search != "" &&
 			!strings.Contains(
 				strings.ToLower(ch.Name),
-				strings.ToLower(search),
+				search,
 			) {
 			continue
 		}
@@ -93,17 +94,5 @@ func (s *IPTVService) GetStream(
 	ctx context.Context,
 	id string,
 ) (string, error) {
-
-	streams, err := s.repo.GetStreams(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	for _, stream := range streams {
-		if stream.Channel == id {
-			return stream.URL, nil
-		}
-	}
-
-	return "", nil
+	return s.repo.GetStreamURL(ctx, id)
 }
