@@ -46,6 +46,7 @@
             const [categoryOpen, setCategoryOpen] = useState(false)
             const [loading, setLoading] = useState(true)
             const [error, setError] = useState('')
+            const [isPlaying, setIsPlaying] = useState(false)
 
             const countriesMap = useMemo(() => {
                 return countries.reduce((acc, country) => {
@@ -189,7 +190,11 @@
             async function playChannel(channel) {
                 setSelectedChannel(channel)
 
-                const res = await fetch(`/api/stream/${channel.id}`)
+                const controller = new AbortController()
+                const res = await fetch(`/api/stream/${channel.id}`, {
+                    signal: controller.signal
+                })
+
                 const data = await res.json()
                 const video = videoRef.current
 
@@ -198,16 +203,33 @@
                 }
 
                 if (hlsRef.current) {
+                    hlsRef.current.stopLoad()
+                    hlsRef.current.detachMedia()
                     hlsRef.current.destroy()
                     hlsRef.current = null
                 }
 
                 if (window.Hls && Hls.isSupported()) {
-                    hlsRef.current = new Hls()
+                    const video = videoRef.current
+
+                    hlsRef.current = new Hls({
+                        enableWorker: true,
+                        lowLatencyMode: true,
+                        backBufferLength: 0,
+                        maxBufferLength: 3,
+                        liveSyncDurationCount: 1,
+                    })
+
                     hlsRef.current.loadSource(data.url)
                     hlsRef.current.attachMedia(video)
+
+                    hlsRef.current.on(Hls.Events.MANIFEST_PARSED, () => {
+                        setIsPlaying(true)
+                        video.play().catch(() => {})
+                    })
                 } else {
                     video.src = data.url
+                    video.play().catch(() => {})
                 }
 
                 video.play()
