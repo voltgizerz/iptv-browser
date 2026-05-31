@@ -12,6 +12,7 @@ import (
 
 type IPTVRepository interface {
 	GetCountries(context.Context) ([]model.Country, error)
+	GetCategories(context.Context) ([]model.Category, error)
 	GetChannels(context.Context) ([]model.Channel, error)
 	GetStreams(context.Context) ([]model.Stream, error)
 	GetLogos(context.Context) ([]model.Logo, error)
@@ -23,10 +24,11 @@ type iptvRepository struct {
 
 	mu sync.RWMutex
 
-	countries []model.Country
-	channels  []model.Channel
-	streams   []model.Stream
-	logos     []model.Logo
+	countries  []model.Country
+	categories []model.Category
+	channels   []model.Channel
+	streams    []model.Stream
+	logos      []model.Logo
 
 	streamMap map[string]string
 	logoMap   map[string]string
@@ -77,20 +79,22 @@ func (r *iptvRepository) ensureCache(ctx context.Context) error {
 	}
 
 	var (
-		countries []model.Country
-		channels  []model.Channel
-		streams   []model.Stream
-		logos     []model.Logo
+		countries  []model.Country
+		categories []model.Category
+		channels   []model.Channel
+		streams    []model.Stream
+		logos      []model.Logo
 
-		countriesErr error
-		channelsErr  error
-		streamsErr   error
-		logosErr     error
+		countriesErr  error
+		categoriesErr error
+		channelsErr   error
+		streamsErr    error
+		logosErr      error
 	)
 
 	var wg sync.WaitGroup
 
-	wg.Add(4)
+	wg.Add(5)
 
 	go func() {
 		defer wg.Done()
@@ -98,6 +102,15 @@ func (r *iptvRepository) ensureCache(ctx context.Context) error {
 		countriesErr = r.fetch(
 			"https://iptv-org.github.io/api/countries.json",
 			&countries,
+		)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		categoriesErr = r.fetch(
+			"https://iptv-org.github.io/api/categories.json",
+			&categories,
 		)
 	}()
 
@@ -134,6 +147,10 @@ func (r *iptvRepository) ensureCache(ctx context.Context) error {
 		return countriesErr
 	}
 
+	if categoriesErr != nil {
+		return categoriesErr
+	}
+
 	if channelsErr != nil {
 		return channelsErr
 	}
@@ -159,6 +176,7 @@ func (r *iptvRepository) ensureCache(ctx context.Context) error {
 	}
 
 	r.countries = countries
+	r.categories = categories
 	r.channels = channels
 	r.streams = streams
 	r.logos = logos
@@ -180,6 +198,17 @@ func (r *iptvRepository) GetCountries(ctx context.Context) ([]model.Country, err
 	defer r.mu.RUnlock()
 
 	return r.countries, nil
+}
+
+func (r *iptvRepository) GetCategories(ctx context.Context) ([]model.Category, error) {
+	if err := r.ensureCache(ctx); err != nil {
+		return nil, err
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return r.categories, nil
 }
 
 func (r *iptvRepository) GetChannels(ctx context.Context) ([]model.Channel, error) {

@@ -37,6 +37,7 @@ func main() {
 	api := r.Group("/api")
 	{
 		api.GET("/countries", h.GetCountries)
+		api.GET("/categories", h.GetCategories)
 		api.GET("/channels", h.GetChannels)
 		api.GET("/stream/:id", h.GetStream)
 	}

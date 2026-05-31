@@ -34,8 +34,17 @@
         <input
             type="text"
             id="search"
-            placeholder="Search channel..."
+            placeholder="Search channel or category..."
         />
+
+        <input
+            type="text"
+            id="category"
+            list="categories"
+            placeholder="Search category..."
+        >
+
+        <datalist id="categories"></datalist>
 
         <div id="channels" class="channels">
         </div>
@@ -75,6 +84,52 @@
 
 let hls
 let countriesMap = {}
+let categoriesMap = {}
+
+function escapeHTML(value) {
+    const div = document.createElement('div')
+    div.innerText = value || ''
+
+    return div.innerHTML
+}
+
+function renderBadges(channel) {
+    const categoryBadges = (channel.categories || [])
+        .map(category => `
+            <span class="category-badge">
+                ${escapeHTML(categoriesMap[category] || category)}
+            </span>
+        `)
+        .join('')
+
+    return `
+        <div class="channel-badges">
+            ${categoryBadges}
+            ${channel.is_nsfw ? '<span class="nsfw-badge">NSFW</span>' : ''}
+        </div>
+    `
+}
+
+async function loadCategories() {
+
+    const res = await fetch('/api/categories')
+    const data = await res.json()
+
+    categoriesMap = {}
+
+    document.getElementById('categories').innerHTML =
+        data
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(category => `
+                <option value="${escapeHTML(category.name)}">
+            `)
+            .join('')
+
+    data.forEach(category => {
+        categoriesMap[category.id] = category.name
+        categoriesMap[category.name.toLowerCase()] = category.name
+    })
+}
 
 async function loadCountries() {
 
@@ -108,8 +163,11 @@ async function loadChannels() {
     const search =
         document.getElementById('search').value
 
+    const category =
+        document.getElementById('category').value
+
     const res = await fetch(
-        `/api/channels?country=${country}&q=${encodeURIComponent(search)}`
+        `/api/channels?country=${country}&category=${encodeURIComponent(category)}&q=${encodeURIComponent(search)}`
     )
 
     const channels = await res.json()
@@ -117,19 +175,26 @@ async function loadChannels() {
     let html = ""
 
     channels.forEach(channel => {
+        const id = JSON.stringify(channel.id)
+        const name = JSON.stringify(channel.name)
+        const isNSFW = JSON.stringify(channel.is_nsfw)
 
         html += `
         <div
             class="channel"
-            onclick="playChannel('${channel.id}','${channel.name}')">
+            onclick='playChannel(${id},${name},${isNSFW})'>
 
             <img
                 src="${channel.logo}"
                 onerror="this.src='https://placehold.co/60x60?text=TV'"
             >
 
-            <div class="channel-name">
-                ${channel.name}
+            <div class="channel-meta">
+                <div class="channel-name">
+                    ${escapeHTML(channel.name)}
+                </div>
+
+                ${renderBadges(channel)}
             </div>
 
         </div>
@@ -141,11 +206,12 @@ async function loadChannels() {
         .innerHTML = html
 }
 
-async function playChannel(id, name) {
+async function playChannel(id, name, isNSFW) {
 
-    document.getElementById(
-        'channelName'
-    ).innerText = name
+    document.getElementById('channelName').innerHTML = `
+        ${escapeHTML(name)}
+        ${isNSFW ? '<span class="nsfw-badge">NSFW</span>' : ''}
+    `
 
     const res =
         await fetch(`/api/stream/${id}`)
@@ -194,7 +260,12 @@ document
     .getElementById('search')
     .addEventListener('input', loadChannels)
 
+document
+    .getElementById('category')
+    .addEventListener('input', loadChannels)
+
 loadCountries()
+loadCategories()
 loadChannels()
 
 </script>

@@ -29,11 +29,22 @@ func (h *IPTVHandler) GetCountries(c *gin.Context) {
 	c.JSON(http.StatusOK, data)
 }
 
+func (h *IPTVHandler) GetCategories(c *gin.Context) {
+	data, err := h.service.GetCategories(c)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, data)
+}
+
 func (h *IPTVHandler) GetChannels(c *gin.Context) {
 
 	data, err := h.service.GetChannels(
 		c,
 		c.Query("country"),
+		c.Query("category"),
 		c.Query("q"),
 	)
 

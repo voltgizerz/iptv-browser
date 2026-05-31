@@ -26,11 +26,19 @@ func (s *IPTVService) GetCountries(
 	return s.repo.GetCountries(ctx)
 }
 
+func (s *IPTVService) GetCategories(
+	ctx context.Context,
+) ([]model.Category, error) {
+	return s.repo.GetCategories(ctx)
+}
+
 func (s *IPTVService) GetChannels(
 	ctx context.Context,
 	country string,
+	category string,
 	search string,
 ) ([]model.ChannelResponse, error) {
+	category = strings.ToLower(strings.TrimSpace(category))
 	search = strings.ToLower(strings.TrimSpace(search))
 
 	channels, err := s.repo.GetChannels(ctx)
@@ -67,11 +75,12 @@ func (s *IPTVService) GetChannels(
 			continue
 		}
 
-		if search != "" &&
-			!strings.Contains(
-				strings.ToLower(ch.Name),
-				search,
-			) {
+		if category != "" &&
+			!matchesCategory(ch.Categories, category) {
+			continue
+		}
+
+		if search != "" && !matchesChannelSearch(ch, search) {
 			continue
 		}
 
@@ -80,14 +89,46 @@ func (s *IPTVService) GetChannels(
 		}
 
 		result = append(result, model.ChannelResponse{
-			ID:      ch.ID,
-			Name:    ch.Name,
-			Country: ch.Country,
-			Logo:    logoMap[ch.ID],
+			ID:         ch.ID,
+			Name:       ch.Name,
+			Country:    ch.Country,
+			Categories: ch.Categories,
+			Logo:       logoMap[ch.ID],
+			IsNSFW:     ch.IsNSFW,
 		})
 	}
 
 	return result, nil
+}
+
+func matchesCategory(categories []string, category string) bool {
+	for _, c := range categories {
+		if strings.Contains(strings.ToLower(c), category) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func matchesChannelSearch(ch model.Channel, search string) bool {
+	values := []string{
+		ch.ID,
+		ch.Name,
+		ch.Country,
+		ch.Network,
+	}
+
+	values = append(values, ch.AltNames...)
+	values = append(values, ch.Categories...)
+
+	for _, value := range values {
+		if strings.Contains(strings.ToLower(value), search) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *IPTVService) GetStream(
