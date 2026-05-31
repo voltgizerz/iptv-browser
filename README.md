@@ -1,6 +1,11 @@
-# IPTV Browser
+# 📺 IPTV Browser
 
-A lightweight IPTV aggregation service built in Go that collects and normalizes IPTV metadata such as countries, channels, streams, and logos into a unified data layer.
+A simple fullstack web application for browsing IPTV channels using M3U playlist or Xtream Codes API.
+
+> ⚠️ DISCLAIMER  
+> This project is built strictly for **learning and educational purposes only**.  
+> It does not host, store, or distribute any IPTV content or streams.  
+> All data sources are external and users are fully responsible for how they use this application.
 
 ---
 
@@ -46,26 +51,6 @@ The project follows a simple layered architecture:
 
 This structure keeps the system modular, testable, and easy to scale.
 
----
-
-## Project Structure
-
-```text
-iptv-browser/
-├── internal/
-│   ├── handler/
-│   ├── service/
-│   ├── repository/
-│   └── model/
-├── static/
-│   └── sample.png
-├── cmd/
-├── main.go
-└── go.mod
-```
-
----
-
 ## Concurrency Design
 
 The system uses Go goroutines to fetch IPTV resources in parallel.
@@ -74,23 +59,9 @@ Synchronization is handled using wait groups to ensure safe completion of all co
 
 ---
 
-## Future Improvements
-
-* Add caching layer (Redis)
-* Add search and filtering capabilities
-* Add pagination support
-* Add OpenAPI/Swagger documentation
-* Add Docker support
-* Improve retry and error handling for external sources
-
----
 
 ## Disclaimer
 
 This project only aggregates publicly available IPTV metadata and does not host or distribute any media content.
 
 ---
-
-## License
-
-MIT
