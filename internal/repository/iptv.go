@@ -58,7 +58,7 @@ func (r *iptvRepository) fetch(url string, target any) error {
 	return json.NewDecoder(resp.Body).Decode(target)
 }
 
-func (r *iptvRepository) ensureCache(ctx context.Context) error {
+func (r *iptvRepository) ensureCache(_ context.Context) error {
 
 	r.mu.RLock()
 

@@ -1,274 +1,407 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>IPTV Browser by Voltgizerz</title>
+    <title>IPTV Browser by Voltgizerz</title>
 
-<link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/54938467?v=4">
+    <link rel="apple-touch-icon" href="https://avatars.githubusercontent.com/u/54938467?v=4">
+    <link rel="stylesheet" href="/static/style.css">
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 
 <body>
+    <div id="root"></div>
 
-<div class="container">
+    <script type="text/babel">
+        const { useEffect, useMemo, useRef, useState } = React
 
-    <aside class="sidebar">
+        function App() {
+            const videoRef = useRef(null)
+            const hlsRef = useRef(null)
 
-        <div class="logo">
-            IPTV Browser
-        </div>
+            const [countries, setCountries] = useState([])
+            const [categories, setCategories] = useState([])
+            const [channels, setChannels] = useState([])
+            const [selectedChannel, setSelectedChannel] = useState(null)
+            const [filters, setFilters] = useState({
+                country: '',
+                search: '',
+                category: '',
+            })
+            const [countryOpen, setCountryOpen] = useState(false)
+            const [loading, setLoading] = useState(true)
+            const [error, setError] = useState('')
 
-        <input
-            type="text"
-            id="country"
-            list="countries"
-            placeholder="Search country..."
-        >
+            const countriesMap = useMemo(() => {
+                return countries.reduce((acc, country) => {
+                    acc[country.name] = country.code
+                    return acc
+                }, {})
+            }, [countries])
 
-        <datalist id="countries"></datalist>
+            const categoriesMap = useMemo(() => {
+                return categories.reduce((acc, category) => {
+                    acc[category.id] = category.name
+                    acc[category.name.toLowerCase()] = category.name
+                    return acc
+                }, {})
+            }, [categories])
 
-        <input
-            type="text"
-            id="search"
-            placeholder="Search channel or category..."
-        />
+            const filteredCountries = useMemo(() => {
+                const query = filters.country.trim().toLowerCase()
 
-        <input
-            type="text"
-            id="category"
-            list="categories"
-            placeholder="Search category..."
-        >
+                return countries
+                    .filter(country => {
+                        if (!query) {
+                            return true
+                        }
 
-        <datalist id="categories"></datalist>
+                        return country.name.toLowerCase().includes(query) ||
+                            country.code.toLowerCase().includes(query)
+                    })
+                    .slice(0, query ? 12 : 6)
+            }, [countries, filters.country])
 
-        <div id="channels" class="channels">
-        </div>
+            useEffect(() => {
+                async function loadFilters() {
+                    try {
+                        const [countriesRes, categoriesRes] = await Promise.all([
+                            fetch('/api/countries'),
+                            fetch('/api/categories'),
+                        ])
 
-    </aside>
+                        if (!countriesRes.ok || !categoriesRes.ok) {
+                            throw new Error('Failed to load filters')
+                        }
 
-    <main class="content">
+                        const [countriesData, categoriesData] = await Promise.all([
+                            countriesRes.json(),
+                            categoriesRes.json(),
+                        ])
 
-        <div class="player-wrapper">
+                        setCountries(countriesData)
+                        setCategories(
+                            categoriesData.sort((a, b) =>
+                                a.name.localeCompare(b.name)
+                            )
+                        )
+                    } catch (err) {
+                        setError(err.message)
+                    }
+                }
 
-            <video
-                id="video"
-                controls
-                autoplay
-                playsinline
-            ></video>
+                loadFilters()
+            }, [])
 
-        </div>
+            useEffect(() => {
+                const controller = new AbortController()
 
-        <div class="player-info">
+                async function loadChannels() {
+                    setLoading(true)
+                    setError('')
 
-            <h2 id="channelName">
-                Select a channel
-            </h2>
+                    const country = countriesMap[filters.country] || ''
+                    const params = new URLSearchParams({
+                        country,
+                        category: filters.category,
+                        q: filters.search,
+                    })
 
-            <button onclick="fullscreenPlayer()">
-                Fullscreen
-            </button>
+                    try {
+                        const res = await fetch(`/api/channels?${params}`, {
+                            signal: controller.signal,
+                        })
 
-        </div>
+                        if (!res.ok) {
+                            throw new Error('Failed to load channels')
+                        }
 
-    </main>
+                        setChannels(await res.json())
+                    } catch (err) {
+                        if (err.name !== 'AbortError') {
+                            setError(err.message)
+                        }
+                    } finally {
+                        setLoading(false)
+                    }
+                }
 
-</div>
+                loadChannels()
 
-<script>
+                return () => controller.abort()
+            }, [countriesMap, filters])
 
-let hls
-let countriesMap = {}
-let categoriesMap = {}
+            useEffect(() => {
+                return () => {
+                    if (hlsRef.current) {
+                        hlsRef.current.destroy()
+                    }
+                }
+            }, [])
 
-function escapeHTML(value) {
-    const div = document.createElement('div')
-    div.innerText = value || ''
+            function updateFilter(key, value) {
+                setFilters(current => ({
+                    ...current,
+                    [key]: value,
+                }))
+            }
 
-    return div.innerHTML
-}
+            function selectCountry(country) {
+                updateFilter('country', country.name)
+                setCountryOpen(false)
+            }
 
-function renderBadges(channel) {
-    const categoryBadges = (channel.categories || [])
-        .map(category => `
-            <span class="category-badge">
-                ${escapeHTML(categoriesMap[category] || category)}
-            </span>
-        `)
-        .join('')
+            async function playChannel(channel) {
+                setSelectedChannel(channel)
 
-    return `
-        <div class="channel-badges">
-            ${categoryBadges}
-            ${channel.is_nsfw ? '<span class="nsfw-badge">NSFW</span>' : ''}
-        </div>
-    `
-}
+                const res = await fetch(`/api/stream/${channel.id}`)
+                const data = await res.json()
+                const video = videoRef.current
 
-async function loadCategories() {
+                if (!video) {
+                    return
+                }
 
-    const res = await fetch('/api/categories')
-    const data = await res.json()
+                if (hlsRef.current) {
+                    hlsRef.current.destroy()
+                    hlsRef.current = null
+                }
 
-    categoriesMap = {}
+                if (window.Hls && Hls.isSupported()) {
+                    hlsRef.current = new Hls()
+                    hlsRef.current.loadSource(data.url)
+                    hlsRef.current.attachMedia(video)
+                } else {
+                    video.src = data.url
+                }
 
-    document.getElementById('categories').innerHTML =
-        data
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map(category => `
-                <option value="${escapeHTML(category.name)}">
-            `)
-            .join('')
+                video.play()
+            }
 
-    data.forEach(category => {
-        categoriesMap[category.id] = category.name
-        categoriesMap[category.name.toLowerCase()] = category.name
-    })
-}
+            function fullscreenPlayer() {
+                const video = videoRef.current
 
-async function loadCountries() {
+                if (video && video.requestFullscreen) {
+                    video.requestFullscreen()
+                }
+            }
 
-    const res = await fetch('/api/countries')
-    const data = await res.json()
+            return (
+                <div className="app-shell">
+                    <aside className="sidebar">
+                        <div className="brand">
+                            <img
+                                className="brand-mark"
+                                src="https://avatars.githubusercontent.com/u/54938467?v=4"
+                                alt="Voltgizerz logo"
+                            />
+                            <div>
+                                <h1>IPTV Browser</h1>
+                                <p>Explore live channels by country and category.</p>
+                            </div>
+                        </div>
 
-    const datalist =
-        document.getElementById('countries')
+                        <div className="filters">
+                            <label
+                                className="combo-field"
+                                onBlur={e => {
+                                    if (!e.currentTarget.contains(e.relatedTarget)) {
+                                        setCountryOpen(false)
+                                    }
+                                }}
+                            >
+                                <span>Country</span>
+                                <div className="combo">
+                                    <input
+                                        type="search"
+                                        value={filters.country}
+                                        onFocus={() => setCountryOpen(true)}
+                                        onChange={e => {
+                                            updateFilter('country', e.target.value)
+                                            setCountryOpen(true)
+                                        }}
+                                        placeholder="Search country..."
+                                    />
 
-    datalist.innerHTML = ""
+                                    {filters.country && (
+                                        <button
+                                            type="button"
+                                            className="combo-clear"
+                                            onClick={() => {
+                                                updateFilter('country', '')
+                                                setCountryOpen(true)
+                                            }}
+                                            aria-label="Clear country"
+                                        >
+                                            x
+                                        </button>
+                                    )}
 
-    data.forEach(country => {
+                                    {countryOpen && (
+                                        <div className="combo-menu">
+                                            {filteredCountries.length === 0 && (
+                                                <div className="combo-empty">
+                                                    No countries found
+                                                </div>
+                                            )}
 
-        countriesMap[country.name] =
-            country.code
+                                            {filteredCountries.map(country => (
+                                                <button
+                                                    type="button"
+                                                    key={country.code}
+                                                    className="combo-option"
+                                                    onMouseDown={e => e.preventDefault()}
+                                                    onClick={() => selectCountry(country)}
+                                                >
+                                                    <span>{country.name}</span>
+                                                    <strong>{country.code}</strong>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </label>
 
-        datalist.innerHTML += `
-            <option value="${country.name}">
-        `
-    })
-}
+                            <label>
+                                <span>Channel</span>
+                                <input
+                                    type="search"
+                                    value={filters.search}
+                                    onChange={e => updateFilter('search', e.target.value)}
+                                    placeholder="Search channel, network, category..."
+                                />
+                            </label>
 
-async function loadChannels() {
+                            <label>
+                                <span>Category</span>
+                                <input
+                                    type="text"
+                                    list="categories"
+                                    value={filters.category}
+                                    onChange={e => updateFilter('category', e.target.value)}
+                                    placeholder="Search category..."
+                                />
+                            </label>
 
-    const countryInput =
-        document.getElementById('country').value
+                            <datalist id="categories">
+                                {categories.map(category => (
+                                    <option key={category.id} value={category.name} />
+                                ))}
+                            </datalist>
+                        </div>
 
-    const country =
-        countriesMap[countryInput] || ""
+                        <div className="sidebar-meta">
+                            <span>{loading ? 'Loading' : `${channels.length} channels`}</span>
+                            {error && <span className="error-text">{error}</span>}
+                        </div>
 
-    const search =
-        document.getElementById('search').value
+                        <div className="channels">
+                            {!loading && channels.length === 0 && (
+                                <div className="empty-state">
+                                    No channels found.
+                                </div>
+                            )}
 
-    const category =
-        document.getElementById('category').value
+                            {channels.map(channel => (
+                                <button
+                                    type="button"
+                                    key={channel.id}
+                                    className={
+                                        selectedChannel?.id === channel.id
+                                            ? 'channel active'
+                                            : 'channel'
+                                    }
+                                    onClick={() => playChannel(channel)}
+                                >
+                                    <img
+                                        src={channel.logo || 'https://placehold.co/60x60?text=TV'}
+                                        alt=""
+                                        onError={e => {
+                                            e.currentTarget.src = 'https://placehold.co/60x60?text=TV'
+                                        }}
+                                    />
 
-    const res = await fetch(
-        `/api/channels?country=${country}&category=${encodeURIComponent(category)}&q=${encodeURIComponent(search)}`
-    )
+                                    <div className="channel-meta">
+                                        <div className="channel-name">
+                                            {channel.name}
+                                        </div>
 
-    const channels = await res.json()
+                                        <div className="channel-badges">
+                                            {(channel.categories || []).map(category => (
+                                                <span className="category-badge" key={category}>
+                                                    {categoriesMap[category] || category}
+                                                </span>
+                                            ))}
 
-    let html = ""
+                                            {channel.is_nsfw && (
+                                                <span className="nsfw-badge">NSFW</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </aside>
 
-    channels.forEach(channel => {
-        const id = JSON.stringify(channel.id)
-        const name = JSON.stringify(channel.name)
-        const isNSFW = JSON.stringify(channel.is_nsfw)
+                    <main className="content">
+                        <section className="player-stage">
+                            <div className="player-panel">
+                                <div className="video-frame">
+                                    <video
+                                        ref={videoRef}
+                                        controls
+                                        autoPlay
+                                        playsInline
+                                    />
 
-        html += `
-        <div
-            class="channel"
-            onclick='playChannel(${id},${name},${isNSFW})'>
+                                    <div className="video-placeholder">
+                                        <span className="eyebrow">
+                                            {selectedChannel ? 'Loading stream' : 'No channel selected'}
+                                        </span>
+                                        <strong>
+                                            {selectedChannel ? selectedChannel.name : 'Choose a channel from the list'}
+                                        </strong>
+                                    </div>
+                                </div>
 
-            <img
-                src="${channel.logo}"
-                onerror="this.src='https://placehold.co/60x60?text=TV'"
-            >
+                                <section className="player-info">
+                                    <div>
+                                        <span className="eyebrow">
+                                            {selectedChannel ? selectedChannel.country : 'Ready'}
+                                        </span>
+                                        <h2>
+                                            {selectedChannel ? selectedChannel.name : 'Select a channel'}
+                                            {selectedChannel?.is_nsfw && (
+                                                <span className="nsfw-badge">NSFW</span>
+                                            )}
+                                        </h2>
+                                    </div>
 
-            <div class="channel-meta">
-                <div class="channel-name">
-                    ${escapeHTML(channel.name)}
+                                    <button
+                                        type="button"
+                                        className="primary-action"
+                                        onClick={fullscreenPlayer}
+                                    >
+                                        Fullscreen
+                                    </button>
+                                </section>
+                            </div>
+                        </section>
+                    </main>
                 </div>
+            )
+        }
 
-                ${renderBadges(channel)}
-            </div>
-
-        </div>
-        `
-    })
-
-    document
-        .getElementById('channels')
-        .innerHTML = html
-}
-
-async function playChannel(id, name, isNSFW) {
-
-    document.getElementById('channelName').innerHTML = `
-        ${escapeHTML(name)}
-        ${isNSFW ? '<span class="nsfw-badge">NSFW</span>' : ''}
-    `
-
-    const res =
-        await fetch(`/api/stream/${id}`)
-
-    const data =
-        await res.json()
-
-    const video =
-        document.getElementById('video')
-
-    if (hls) {
-        hls.destroy()
-    }
-
-    if (Hls.isSupported()) {
-
-        hls = new Hls()
-
-        hls.loadSource(data.url)
-
-        hls.attachMedia(video)
-
-    } else {
-
-        video.src = data.url
-    }
-
-    video.play()
-}
-
-function fullscreenPlayer() {
-
-    const video =
-        document.getElementById('video')
-
-    if (video.requestFullscreen) {
-        video.requestFullscreen()
-    }
-}
-
-document
-    .getElementById('country')
-    .addEventListener('input', loadChannels)
-
-document
-    .getElementById('search')
-    .addEventListener('input', loadChannels)
-
-document
-    .getElementById('category')
-    .addEventListener('input', loadChannels)
-
-loadCountries()
-loadCategories()
-loadChannels()
-
-</script>
-
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+    </script>
 </body>
+
 </html>
