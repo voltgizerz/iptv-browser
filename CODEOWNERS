@@ -1,0 +1,28 @@
+# Default owner for everything
+* @voltgizerz
+
+# Backend core
+/backend/ @voltgizerz
+/internal/ @voltgizerz
+
+# Router & API layer
+/internal/router/ @voltgizerz
+/internal/handler/ @voltgizerz
+
+# Business logic
+/internal/service/ @voltgizerz
+
+# Data layer
+/internal/repository/ @voltgizerz
+
+# Frontend
+/frontend/ @voltgizerz
+
+# Static assets
+/static/ @voltgizerz
+/templates/ @voltgizerz
+
+# Root config files
+go.mod @voltgizerz
+go.sum @voltgizerz
+README.md @voltgizerz
