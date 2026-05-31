@@ -29,6 +29,12 @@ func main() {
 	r := gin.Default()
 
 	r.Static("/static", "./static")
+	r.StaticFile("/sw.js", "./static/sw.js")
+
+	r.GET("/manifest.webmanifest", func(c *gin.Context) {
+		c.Header("Content-Type", "application/manifest+json")
+		c.File("static/manifest.webmanifest")
+	})
 
 	r.GET("/", func(c *gin.Context) {
 		c.File("templates/index.html")

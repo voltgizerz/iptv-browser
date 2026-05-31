@@ -7,8 +7,14 @@
 
     <title>IPTV Browser by Voltgizerz</title>
 
-    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/54938467?v=4">
-    <link rel="apple-touch-icon" href="https://avatars.githubusercontent.com/u/54938467?v=4">
+    <link rel="icon" type="image/jpeg" href="/static/icon-512.jpg">
+    <link rel="apple-touch-icon" href="/static/icon-512.jpg">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#080a0f">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="IPTV Browser">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="/static/style.css">
 
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -37,6 +43,7 @@
                 category: '',
             })
             const [countryOpen, setCountryOpen] = useState(false)
+            const [categoryOpen, setCategoryOpen] = useState(false)
             const [loading, setLoading] = useState(true)
             const [error, setError] = useState('')
 
@@ -69,6 +76,21 @@
                     })
                     .slice(0, query ? 12 : 6)
             }, [countries, filters.country])
+
+            const filteredCategories = useMemo(() => {
+                const query = filters.category.trim().toLowerCase()
+
+                return categories
+                    .filter(category => {
+                        if (!query) {
+                            return true
+                        }
+
+                        return category.name.toLowerCase().includes(query) ||
+                            category.id.toLowerCase().includes(query)
+                    })
+                    .slice(0, query ? 12 : 6)
+            }, [categories, filters.category])
 
             useEffect(() => {
                 async function loadFilters() {
@@ -157,6 +179,11 @@
             function selectCountry(country) {
                 updateFilter('country', country.name)
                 setCountryOpen(false)
+            }
+
+            function selectCategory(category) {
+                updateFilter('category', category.name)
+                setCategoryOpen(false)
             }
 
             async function playChannel(channel) {
@@ -280,22 +307,65 @@
                                 />
                             </label>
 
-                            <label>
+                            <label
+                                className="combo-field"
+                                onBlur={e => {
+                                    if (!e.currentTarget.contains(e.relatedTarget)) {
+                                        setCategoryOpen(false)
+                                    }
+                                }}
+                            >
                                 <span>Category</span>
-                                <input
-                                    type="text"
-                                    list="categories"
-                                    value={filters.category}
-                                    onChange={e => updateFilter('category', e.target.value)}
-                                    placeholder="Search category..."
-                                />
-                            </label>
+                                <div className="combo">
+                                    <input
+                                        type="search"
+                                        value={filters.category}
+                                        onFocus={() => setCategoryOpen(true)}
+                                        onChange={e => {
+                                            updateFilter('category', e.target.value)
+                                            setCategoryOpen(true)
+                                        }}
+                                        placeholder="Search category..."
+                                    />
 
-                            <datalist id="categories">
-                                {categories.map(category => (
-                                    <option key={category.id} value={category.name} />
-                                ))}
-                            </datalist>
+                                    {filters.category && (
+                                        <button
+                                            type="button"
+                                            className="combo-clear"
+                                            onClick={() => {
+                                                updateFilter('category', '')
+                                                setCategoryOpen(true)
+                                            }}
+                                            aria-label="Clear category"
+                                        >
+                                            x
+                                        </button>
+                                    )}
+
+                                    {categoryOpen && (
+                                        <div className="combo-menu">
+                                            {filteredCategories.length === 0 && (
+                                                <div className="combo-empty">
+                                                    No categories found
+                                                </div>
+                                            )}
+
+                                            {filteredCategories.map(category => (
+                                                <button
+                                                    type="button"
+                                                    key={category.id}
+                                                    className="combo-option"
+                                                    onMouseDown={e => e.preventDefault()}
+                                                    onClick={() => selectCategory(category)}
+                                                >
+                                                    <span>{category.name}</span>
+                                                    <strong>{category.id}</strong>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </label>
                         </div>
 
                         <div className="sidebar-meta">
@@ -401,6 +471,12 @@
         }
 
         ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+            })
+        }
     </script>
 </body>
 

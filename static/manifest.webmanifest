@@ -1,0 +1,19 @@
+{
+  "name": "IPTV Browser by Voltgizerz",
+  "short_name": "IPTV Browser",
+  "description": "Explore live IPTV channels by country and category.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080a0f",
+  "theme_color": "#080a0f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/static/icon-512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
